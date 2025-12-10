@@ -1,81 +1,67 @@
-# 🎯 Bounty Hunter - Automated Debugging Bounty System
+# Bounty Hunter
 
-**Monetize open-source maintenance automatically using MNEE stablecoin bounties on failing tests!**
+## The Problem We Set Out to Solve
 
-## 🏆 MNEE Hackathon Submission
+Every day, thousands of open-source projects that power the modern internet go unmaintained. Bugs pile up. Issues sit unanswered. Developers who once poured their hearts into these projects have moved on—to new jobs, new responsibilities, new lives. The code remains, used by millions, but the people who understand it best are no longer there.
 
-This project is built for the **MNEE Hackathon** under the **Financial Automation** track. It demonstrates programmable money for automated financial workflows by creating an autonomous system that pays developers for fixing bugs.
+Meanwhile, talented developers around the world have time and skills to contribute, but lack the incentive. "Why should I spend my weekend debugging someone else's code for free?" is a fair question. The result is a tragedy of the commons: projects that benefit everyone are maintained by no one.
 
-## 🚀 Overview
+We built Bounty Hunter because we believe there's a better way.
 
-Bounty Hunter is a GitHub bot that automatically creates cryptocurrency bounties when CI/CD pipelines fail. When developers submit pull requests that fix the failing tests, they automatically receive MNEE stablecoin payments.
+## What If Bug Fixes Paid for Themselves?
 
-### Key Features
+Imagine a world where open-source maintenance is sustainable. Where a failing test doesn't just create anxiety—it creates opportunity. Where developers can earn real money for solving real problems, and project maintainers don't have to beg for help.
 
-- ✅ **Automated Bounty Creation**: Failing tests trigger automatic bounty creation
-- 💰 **MNEE Stablecoin Payments**: Uses USD-backed MNEE for stable, predictable rewards
-- 📈 **Time-Based Escalation**: Bounties increase automatically over time if not claimed
-- 🔒 **Transparent State Management**: All bounty states tracked in PostgreSQL
-- 🎯 **Instant Payment**: Successful fixes trigger automatic MNEE release via API
-- 📊 **Admin Dashboard**: Monitor active bounties and system metrics
-- 🔧 **Flexible Configuration**: Repository-specific settings and overrides
+Bounty Hunter makes this possible by automating the entire process:
 
-## 💡 How It Demonstrates Programmable Money
+1. Your CI/CD pipeline runs. A test fails.
+2. Automatically, a bounty is created—real money, waiting for whoever fixes it.
+3. A developer somewhere finds the issue, understands the problem, and submits a fix.
+4. The moment the tests pass, payment is released. No paperwork. No waiting. No trust required.
 
-1. **Automated Value Transfer**: MNEE moves automatically based on code events (test failures/fixes)
-2. **Transparent State Tracking**: PostgreSQL database provides full audit trail
-3. **Time-Based Logic**: Programmable escalation increases bounty value over time
-4. **Conditional Payments**: MNEE is only released when specific conditions are met (tests pass)
+This isn't just about money. It's about respect. Respect for the time developers invest in understanding complex codebases. Respect for the maintainers who need help but can't afford to hire. Respect for the invisible infrastructure that holds the digital world together.
 
-## 📋 How It Works
+## How It Actually Works
 
-1. **Test Failure Detection**: GitHub Actions detect when tests fail in your CI/CD pipeline
-2. **Bounty Creation**: The bot creates a GitHub issue and records the bounty in PostgreSQL
-3. **Developer Fixes**: A developer submits a PR that fixes the failing tests
-4. **Automatic Verification**: The system verifies tests are passing
-5. **Instant Payment**: MNEE stablecoin is automatically sent via MNEE API
+The technical implementation is straightforward, but the implications are profound.
 
-## 🏗️ Architecture
+When you integrate Bounty Hunter into your repository, it watches your test suite. When tests fail, it creates a GitHub issue documenting the failure and records a bounty in our system. The bounty is denominated in MNEE, a USD-backed stablecoin—so developers know exactly what they'll earn, without worrying about cryptocurrency volatility.
 
-```
-bounty-hunter/
-├── bot/               # GitHub bot backend server
-├── github-action/     # GitHub Action for CI/CD integration
-├── dashboard/         # Admin monitoring dashboard
-├── tests/            # Test suites
-├── scripts/          # Deployment and utility scripts
-└── docs/             # Documentation
-```
+Here's where it gets interesting: if nobody claims the bounty right away, it automatically increases over time. A 50 MNEE bounty becomes 60 after 24 hours, 75 after three days, 100 after a week. The longer a bug persists, the more valuable fixing it becomes. This creates a natural market for maintenance work.
 
-### Technology Stack
+When a developer submits a pull request that fixes the failing tests, Bounty Hunter verifies the fix and releases payment directly to their wallet. The entire process—from test failure to payment—can happen without any human intervention.
 
-- **Backend**: Node.js, Express, PostgreSQL
-- **Payments**: MNEE API for direct stablecoin transfers
-- **GitHub Integration**: GitHub App, GitHub Actions
-- **Frontend**: HTML/CSS/JavaScript (admin dashboard)
+## The Technology Behind It
 
-## 🔧 Quick Start
+Bounty Hunter is built on a few key pieces:
 
-### 1. Set Up Database
+**The Bot Server** receives webhook events from GitHub and orchestrates the entire bounty lifecycle. It tracks bounties in a PostgreSQL database, ensuring every state change is recorded and auditable.
+
+**GitHub App Integration** means you don't have to share personal access tokens. When you install Bounty Hunter on your repository, you're granting specific permissions through GitHub's official OAuth flow. The bot operates within those boundaries, nothing more.
+
+**MNEE Stablecoin** handles payments. Unlike volatile cryptocurrencies, MNEE maintains a stable value pegged to the US dollar. This is crucial for bounties—developers need to know what they're working for, and maintainers need to budget predictably.
+
+## Getting Started
+
+Setting this up takes about ten minutes.
+
+First, create a PostgreSQL database for Bounty Hunter:
 
 ```bash
-# Make sure PostgreSQL is installed
 createdb bounty_hunter_bot
 ```
 
-### 2. Set Up Bot Server
+Then clone the repository, install dependencies, and configure your environment:
 
 ```bash
 cd bot
 npm install
 cp .env.example .env
-# Configure .env with your settings
+# Edit .env with your database connection, GitHub App credentials, and MNEE API key
 npm start
 ```
 
-### 3. Add to Your Repository
-
-Create `.github/workflows/bounty-hunter.yml`:
+Finally, add the Bounty Hunter workflow to your repository. Create `.github/workflows/bounty-hunter.yml`:
 
 ```yaml
 name: Bounty Hunter
@@ -99,17 +85,13 @@ jobs:
           bounty_amount: 50
 ```
 
-## 💸 Bounty Configuration
+That's it. The next time your tests fail, Bounty Hunter will create a bounty automatically.
 
-### Default Configuration
+## Configuring Bounty Behavior
 
-- **Base Amount**: 50 MNEE
-- **Escalation**: +20% (24h), +50% (72h), +100% (1 week)
-- **Maximum**: 3x initial amount
+The default configuration works well for most projects, but you can customize everything.
 
-### Custom Configuration
-
-Create `.bounty-hunter.yml` in your repository:
+Create a `.bounty-hunter.yml` file in your repository root:
 
 ```yaml
 bounty_config:
@@ -121,82 +103,78 @@ bounty_config:
     low: 0.5
 ```
 
-## 📈 Bounty Escalation
+The escalation schedule—how bounties increase over time—follows this pattern:
 
-Unclaimed bounties automatically increase over time:
+| Time Elapsed | Increase | Example |
+|--------------|----------|---------|
+| 24 hours     | +20%     | 60 MNEE |
+| 72 hours     | +50%     | 75 MNEE |
+| 1 week       | +100%    | 100 MNEE |
 
-| Time Elapsed | Increase | Example (50 MNEE start) |
-|--------------|----------|-------------------------|
-| 24 hours     | +20%     | 60 MNEE                |
-| 72 hours     | +50%     | 75 MNEE                |
-| 1 week       | +100%    | 100 MNEE               |
+Bounties cap at 3x their initial value. After that, they need human attention.
 
-## 🔐 Security
+## Security and Trust
 
-- All bounty states stored securely in PostgreSQL
-- MNEE payments use secure API authentication
-- GitHub webhook signatures are verified
-- API endpoints require authentication
-- Full audit trail of all transactions
+We understand that automated payment systems need to be trustworthy.
 
-## 📊 Admin Dashboard
+All bounty states are recorded in PostgreSQL with full audit trails. Every payment, every state change, every verification is logged. GitHub webhook signatures are verified cryptographically, so nobody can fake events. API endpoints require authentication.
 
-Access the admin dashboard to:
-- Monitor active bounties
-- View MNEE wallet balance
-- Track contributor statistics
-- Export bounty data
+MNEE payments use secure API credentials that never leave your server. The bot operates with the minimum permissions necessary through GitHub's OAuth system.
 
-## 🤝 Contributing
+## Who Is This For?
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+**Open-source maintainers** who are tired of watching their issue queue grow while their time shrinks. Set up Bounty Hunter once, and let the market handle maintenance.
 
-## 📚 Documentation
+**Companies using open-source** who want to give back in a way that scales. Instead of donating money that might sit in a foundation's bank account, fund specific fixes that matter to you.
 
-- [Setup Guide](docs/SETUP.md) - Detailed installation instructions
-- [Architecture](bounty-hunter-architecture.md) - System design overview
-- [Configuration](bounty-configuration-design.md) - Configuration options
-- [Escalation](bounty-escalation-design.md) - Escalation system details
-- [API Reference](docs/API_REFERENCE.md) - API documentation
-- [MNEE Integration](docs/MNEE_SDK_INTEGRATION.md) - MNEE payment details
+**Developers looking for meaningful work** who want to get paid for their skills without the bureaucracy of traditional freelancing. Find a bounty, fix the bug, receive payment.
 
-## 🎯 Use Cases
+**Organizations running internal platforms** who want to incentivize teams to fix broken tests quickly instead of letting them accumulate.
 
-- **Open Source Projects**: Incentivize bug fixes with stable USD-backed rewards
-- **Enterprise**: Create internal bug bounty programs with predictable costs
-- **DAOs**: Automate contributor payments for maintenance tasks
-- **Education**: Teach debugging with real monetary incentives
+## Why We Chose MNEE
 
-## 🌟 Why MNEE Stablecoin?
+Cryptocurrency bounties have been tried before, but volatility killed them. Nobody wants to work for a bounty that might be worth half as much by the time they claim it.
 
-- **Stable Value**: USD-backed means predictable bounty values
-- **Programmable**: Perfect for automated financial workflows
-- **Native API**: Direct payments without blockchain complexity
-- **Low Volatility**: Developers know exactly what they'll earn
+MNEE solves this by being a stablecoin—its value is pegged to the US dollar. When you see a 50 MNEE bounty, you know it's worth approximately $50. When you receive payment, you're not gambling on market movements.
 
-## 🚀 Benefits of Our Architecture
+MNEE also provides a clean API for programmatic payments. No blockchain transactions, no gas fees, no wallet complications. Just simple API calls that move money instantly.
 
-- **No Gas Fees**: Direct MNEE API payments avoid blockchain transaction costs
-- **Instant Operations**: Database operations are immediate, no waiting for confirmations
-- **Simple Setup**: No smart contract deployment or blockchain configuration needed
-- **Full Transparency**: PostgreSQL provides complete audit trail
-- **Easy Updates**: Business logic changes don't require contract redeployment
+## The Bigger Picture
 
-## 📄 License
+Bounty Hunter started as a hackathon project, but the problem it addresses is real and urgent.
 
-MIT License - see [LICENSE](LICENSE) file for details.
+The world runs on open-source software. The websites you visit, the apps on your phone, the infrastructure of banks and hospitals and governments—all of it depends on code that was given away freely by developers who believed in sharing.
 
-## 🙏 Acknowledgments
+That generosity is beautiful, but it's not sustainable when the people doing the work can't pay rent. Something has to change.
 
-Built with ❤️ for the MNEE Hackathon.
+We believe programmable money—automated payments triggered by verifiable events—is part of the answer. Not charity, but fair exchange. Not goodwill, but aligned incentives.
 
-Special thanks to:
-- MNEE team for creating programmable money infrastructure
-- GitHub for their amazing API and Actions platform
-- PostgreSQL for reliable state management
+Bounty Hunter is a small step in that direction. A tool that makes it slightly easier to maintain open-source software, slightly fairer for the developers who do the work, slightly more sustainable for the ecosystem we all depend on.
+
+## Documentation
+
+For detailed technical documentation, see:
+
+- [Setup Guide](docs/SETUP.md) - Complete installation instructions
+- [API Reference](docs/API_REFERENCE.md) - Endpoint documentation
+- [MNEE Integration](docs/MNEE_SDK_INTEGRATION.md) - Payment system details
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
+- [Deployment Guide](docs/DEPLOYMENT_GUIDE.md) - Production deployment
+
+## Contributing
+
+We welcome contributions. Whether it's fixing a bug, improving documentation, or suggesting new features—all of it helps.
+
+See our Contributing Guide for details on how to get involved.
+
+## License
+
+MIT License - use this however you want.
 
 ---
-## 163jN4jSfLaAauZqL4znAHAgC9N5f4FeRr
-**Ready to automate your bug bounties with MNEE?** [Get Started](docs/SETUP.md) →
 
-**Learn more about MNEE stablecoin:** [mnee.io](https://mnee.io)
+## 163jN4jSfLaAauZqL4znAHAgC9N5f4FeRr
+
+Built for the MNEE Hackathon. Built because we care about open source.
+
+[Get Started](docs/SETUP.md) | [Learn about MNEE](https://mnee.io)
