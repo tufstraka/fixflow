@@ -87,13 +87,13 @@ export function Navigation() {
             <Link href="/" className="flex items-center gap-3 group">
               <div className="relative">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-honey-400 to-honey-600 flex items-center justify-center shadow-honey transform transition-transform group-hover:scale-105">
-                  <Target className="w-5 h-5 text-white" />
+                  <Zap className="w-5 h-5 text-white" />
                 </div>
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-ocean-400 rounded-full border-2 border-white animate-bounce-soft" />
               </div>
               <div className="hidden sm:block">
-                <span className="text-xl font-bold text-warm-800">Bounty</span>
-                <span className="text-xl font-bold text-gradient-honey">Hunter</span>
+                <span className="text-xl font-bold text-warm-800">Fix</span>
+                <span className="text-xl font-bold text-gradient-honey">Flow</span>
               </div>
             </Link>
             

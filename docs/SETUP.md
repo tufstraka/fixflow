@@ -34,9 +34,9 @@ brew services start postgresql
 sudo -u postgres psql
 
 # Create database and user
-CREATE DATABASE bounty_hunter;
+CREATE DATABASE FixFlow;
 CREATE USER bounty_user WITH ENCRYPTED PASSWORD 'your_password';
-GRANT ALL PRIVILEGES ON DATABASE bounty_hunter TO bounty_user;
+GRANT ALL PRIVILEGES ON DATABASE FixFlow TO bounty_user;
 \q
 ```
 
@@ -90,7 +90,7 @@ PORT=3000
 NODE_ENV=production
 
 # Database
-DATABASE_URL=postgresql://bounty_user:your_password@localhost:5432/bounty_hunter
+DATABASE_URL=postgresql://bounty_user:your_password@localhost:5432/FixFlow
 
 # GitHub App
 GITHUB_APP_ID=your_app_id

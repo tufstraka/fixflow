@@ -7,8 +7,8 @@ import { Navigation } from '@/components/Navigation';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Bounty Hunter - Automated Bug Bounties',
-  description: 'Automated debugging bounty system using MNEE stablecoin',
+  title: 'FixFlow - Automated Bug Bounties',
+  description: 'Automated debugging bounty system powered by MNEE stablecoin',
 };
 
 export default function RootLayout({
@@ -27,7 +27,7 @@ export default function RootLayout({
             </main>
             <footer className="bg-gray-800 text-gray-400 py-8 mt-auto">
               <div className="max-w-7xl mx-auto px-4 text-center">
-                <p>Built for the MNEE Hackathon</p>
+                <p>FixFlow — Automated Bug Bounties</p>
                 <p className="text-sm mt-2">Powered by MNEE Stablecoin</p>
               </div>
             </footer>

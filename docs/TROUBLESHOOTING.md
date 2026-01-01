@@ -38,7 +38,7 @@
 4. **Check PostgreSQL connection:**
    ```bash
    # Test connection
-   psql "postgresql://user:pass@host:5432/bounty_hunter"
+   psql "postgresql://user:pass@host:5432/FixFlow"
    ```
 
 ### API Endpoints Not Responding
@@ -466,10 +466,10 @@ pm2 restart bounty-hunter-bot
 
 ```bash
 # 1. Export current data
-pg_dump -h localhost -U user -d bounty_hunter > backup.sql
+pg_dump -h localhost -U user -d FixFlow > backup.sql
 
 # 2. Restore from backup
-psql -h localhost -U user -d bounty_hunter < backup.sql
+psql -h localhost -U user -d FixFlow < backup.sql
 ```
 
 ## Getting Help

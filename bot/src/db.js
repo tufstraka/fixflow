@@ -7,22 +7,111 @@ dotenv.config();
 
 const { Pool } = pg;
 
+// Parse and log connection info (without password)
+const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+if (connectionString) {
+    try {
+        const url = new URL(connectionString);
+        logger.info('Database configuration', {
+            host: url.hostname,
+            port: url.port || '5432',
+            database: url.pathname.slice(1),
+            user: url.username,
+            ssl: process.env.NODE_ENV === 'production' ? 'enabled' : 'disabled'
+        });
+    } catch (e) {
+        logger.warn('Could not parse DATABASE_URL for logging');
+    }
+} else {
+    logger.error('DATABASE_URL or POSTGRES_URL not set!');
+}
+
+// AWS RDS Aurora requires SSL - detect RDS URLs and enable SSL
+const isAwsRds = connectionString?.includes('rds.amazonaws.com');
+const sslConfig = isAwsRds || process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false;
+
+if (isAwsRds) {
+    logger.info('AWS RDS detected - enabling SSL');
+}
+
 const pool = new Pool({
-    connectionString: process.env.DATABASE_URL || process.env.POSTGRES_URL,
-    ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    connectionString: connectionString,
+    ssl: sslConfig,
+    connectionTimeoutMillis: 30000, // 30 second timeout for remote databases
+    idleTimeoutMillis: 30000,
+    max: 20 // Maximum connections in pool
 });
 
-pool.on('error', (err) => {
-    logger.error('Unexpected error on idle client', err);
-    process.exit(-1);
+pool.on('connect', (client) => {
+    logger.debug('New database client connected');
 });
 
-export const query = (text, params) => pool.query(text, params);
-export const getClient = () => pool.connect();
+pool.on('acquire', (client) => {
+    logger.debug('Database client acquired from pool');
+});
+
+pool.on('remove', (client) => {
+    logger.debug('Database client removed from pool');
+});
+
+pool.on('error', (err, client) => {
+    logger.error('Unexpected database pool error', {
+        error: err.message,
+        code: err.code,
+        stack: err.stack
+    });
+    // Don't exit on pool errors - let the application handle individual query errors
+});
+
+export const query = async (text, params) => {
+    const start = Date.now();
+    try {
+        const result = await pool.query(text, params);
+        const duration = Date.now() - start;
+        logger.debug('Database query executed', {
+            query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+            duration: `${duration}ms`,
+            rowCount: result.rowCount
+        });
+        return result;
+    } catch (error) {
+        const duration = Date.now() - start;
+        logger.error('Database query failed', {
+            query: text.substring(0, 100) + (text.length > 100 ? '...' : ''),
+            duration: `${duration}ms`,
+            error: error.message,
+            code: error.code,
+            detail: error.detail,
+            hint: error.hint
+        });
+        throw error;
+    }
+};
+
+export const getClient = async () => {
+    logger.debug('Getting database client from pool');
+    try {
+        const client = await pool.connect();
+        logger.debug('Database client obtained');
+        return client;
+    } catch (error) {
+        logger.error('Failed to get database client', {
+            error: error.message,
+            code: error.code
+        });
+        throw error;
+    }
+};
 
 export const initDb = async () => {
-    const client = await pool.connect();
+    logger.info('Initializing database...');
+    let client;
     try {
+        client = await pool.connect();
+        logger.info('Connected to database, creating tables...');
+        
         await client.query(`
             CREATE TABLE IF NOT EXISTS bounties (
                 id SERIAL PRIMARY KEY,
@@ -115,17 +204,79 @@ export const initDb = async () => {
                 END IF;
             END $$;
         `);
-        logger.info('Database initialized - all tables created/verified');
+        logger.info('Database initialized successfully - all tables created/verified');
     } catch (err) {
-        logger.error('Failed to initialize database:', err);
+        logger.error('Failed to initialize database', {
+            error: err.message,
+            code: err.code,
+            detail: err.detail,
+            hint: err.hint,
+            stack: err.stack
+        });
+        throw err;
+    } finally {
+        if (client) {
+            client.release();
+            logger.debug('Database client released');
+        }
+    }
+};
+
+export const resetDb = async () => {
+    const client = await pool.connect();
+    try {
+        logger.warn('Resetting database - dropping all tables');
+        await client.query(`
+            DROP TABLE IF EXISTS user_sessions CASCADE;
+            DROP TABLE IF EXISTS bounties CASCADE;
+            DROP TABLE IF EXISTS github_installations CASCADE;
+            DROP TABLE IF EXISTS users CASCADE;
+        `);
+        logger.info('All tables dropped');
+        
+        // Re-initialize
+        await initDb();
+    } catch (err) {
+        logger.error('Failed to reset database:', err);
         throw err;
     } finally {
         client.release();
     }
 };
 
+// CLI support for npm scripts
+if (process.argv[1] && process.argv[1].endsWith('db.js')) {
+    const args = process.argv.slice(2);
+    
+    if (args.includes('--init') || args.includes('--migrate')) {
+        initDb()
+            .then(() => {
+                logger.info('Database initialization complete');
+                process.exit(0);
+            })
+            .catch((err) => {
+                logger.error('Database initialization failed:', err);
+                process.exit(1);
+            });
+    } else if (args.includes('--reset')) {
+        resetDb()
+            .then(() => {
+                logger.info('Database reset complete');
+                process.exit(0);
+            })
+            .catch((err) => {
+                logger.error('Database reset failed:', err);
+                process.exit(1);
+            });
+    } else {
+        console.log('Usage: node src/db.js [--init|--migrate|--reset]');
+        process.exit(0);
+    }
+}
+
 export default {
     query,
     getClient,
-    initDb
+    initDb,
+    resetDb
 };

@@ -90,7 +90,7 @@ export default function HomePage() {
                   <div className="w-3 h-3 rounded-full bg-red-400" />
                   <div className="w-3 h-3 rounded-full bg-honey-400" />
                   <div className="w-3 h-3 rounded-full bg-ocean-400" />
-                  <span className="ml-auto text-sm text-warm-400 font-mono">bounty-hunter.yml</span>
+                  <span className="ml-auto text-sm text-warm-400 font-mono">fixflow.yml</span>
                 </div>
                 
                 <div className="bg-warm-800 rounded-xl p-4 font-mono text-sm mb-6 overflow-hidden">
@@ -155,7 +155,7 @@ export default function HomePage() {
           
           <div className="grid md:grid-cols-3 gap-8 lg:gap-12">
             {[
-              { icon: GitBranch, color: 'red', title: 'Test fails, bounty appears', desc: 'Your CI pipeline runs, a test breaks. Bounty Hunter automatically creates an issue and attaches a bounty.', detail: 'Works with any CI/CD' },
+              { icon: GitBranch, color: 'red', title: 'Test fails, bounty appears', desc: 'Your CI pipeline runs, a test breaks. FixFlow automatically creates an issue and attaches a bounty.', detail: 'Works with any CI/CD' },
               { icon: Zap, color: 'ocean', title: 'You fix, PR passes', desc: 'Submit your pull request fixing the issue. Our bot verifies tests are now passing.', detail: 'Automatic verification' },
               { icon: Coins, color: 'honey', title: 'Instant MNEE deposit', desc: 'The moment the PR is merged, MNEE stablecoin is transferred to your wallet.', detail: 'Sub-second settlement' },
             ].map((step, i) => (
@@ -342,8 +342,8 @@ export default function HomePage() {
       <footer className="py-8 border-t border-warm-100">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-warm-600">
-            <Target className="w-5 h-5 text-honey-500" />
-            <span className="font-semibold">Bounty Hunter</span>
+            <Zap className="w-5 h-5 text-honey-500" />
+            <span className="font-semibold">FixFlow</span>
           </div>
           <div className="text-sm text-warm-500">Powered by MNEE Stablecoin</div>
         </div>

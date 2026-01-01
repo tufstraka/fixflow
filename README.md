@@ -48,7 +48,7 @@ Setting this up takes about ten minutes.
 First, create a PostgreSQL database for FixFlow:
 
 ```bash
-createdb bounty_hunter
+createdb FixFlow
 ```
 
 Then clone the repository, install dependencies, and configure your environment:
