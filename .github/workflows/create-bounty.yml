@@ -1,0 +1,46 @@
+name: Create Bounty on Failure
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+
+jobs:
+  create-bounty:
+    name: Create FixFlow Bounty
+    runs-on: ubuntu-latest
+    # Only run if the triggering workflow failed
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      
+      - name: Create FixFlow Bounty
+        uses: tufstraka/Bounty-Hunter/github-action@main
+        id: bounty
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          bot_server_url: ${{ secrets.FIXFLOW_SERVER_URL }}
+          bot_api_key: ${{ secrets.FIXFLOW_API_KEY }}
+          bounty_amount: 50
+          max_bounty: 150
+          config_file: .fixflow.yml
+      
+      - name: Bounty Creation Summary
+        if: steps.bounty.outputs.bounty_created == 'true'
+        run: |
+          echo "🎯 FixFlow Bounty Created!"
+          echo "================================"
+          echo "Issue URL: ${{ steps.bounty.outputs.issue_url }}"
+          echo "Bounty ID: ${{ steps.bounty.outputs.bounty_id }}"
+          echo "Issue Number: ${{ steps.bounty.outputs.issue_number }}"
+          echo ""
+          echo "Triggered by workflow run: ${{ github.event.workflow_run.html_url }}"
+          echo ""
+          echo "A developer can now claim this bounty by:"
+          echo "1. Fixing the failing test"
+          echo "2. Submitting a PR with 'MNEE: their_wallet_address'"
+          echo "3. Getting the PR merged"
