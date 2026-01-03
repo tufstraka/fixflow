@@ -719,22 +719,20 @@ Please contact support if this persists.`
       return;
     }
 
-    // Mark bounty as claimed in our backend
+    // Mark bounty as claimed in our backend (includes PR URL and solver info)
     logger.info(`[CLAIM-BOUNTY] Step 7: Marking bounty as claimed in database...`);
-    await bountyService.claimBounty(
+    const claimResult = await bountyService.claimBounty(
       bounty.bountyId,
       solverAddress,
       paymentResult.transactionId,
-      pullRequest.user.login // Pass GitHub login
+      pullRequest.user.login, // Pass GitHub login
+      pullRequest.html_url    // Pass PR URL
     );
-    logger.info(`[CLAIM-BOUNTY] ✓ Bounty marked as claimed`);
-
-    // Update database
-    logger.info(`[CLAIM-BOUNTY] Step 8: Updating bounty with PR details...`);
-    bounty.pullRequestUrl = pullRequest.html_url;
-    bounty.solverGithubLogin = pullRequest.user.login;
-    await bounty.save();
-    logger.info(`[CLAIM-BOUNTY] ✓ Bounty updated`);
+    logger.info(`[CLAIM-BOUNTY] ✓ Bounty marked as claimed with status: claimed`);
+    
+    // Update local bounty reference to reflect claimed status
+    Object.assign(bounty, claimResult.bounty);
+    logger.info(`[CLAIM-BOUNTY] ✓ Local bounty object updated`);
 
     // Update solver's user stats
     logger.info(`[CLAIM-BOUNTY] Step 9: Updating user stats for ${pullRequest.user.login}...`);
