@@ -119,7 +119,7 @@ class BountyService {
     }
   }
 
-  async claimBounty(bountyId, solverAddress, paymentTxId, solverGithubLogin = null) {
+  async claimBounty(bountyId, solverAddress, paymentTxId, solverGithubLogin = null, pullRequestUrl = null) {
     try {
       logger.info(`Marking bounty ${bountyId} as claimed for solver ${solverAddress} (${solverGithubLogin || 'unknown'})`);
 
@@ -139,14 +139,18 @@ class BountyService {
       bounty.claimedAmount = bounty.currentAmount;
       bounty.claimTransactionHash = paymentTxId || `CLAIM-${bountyId}-${Date.now()}`;
       bounty.claimedAt = new Date();
+      if (pullRequestUrl) {
+        bounty.pullRequestUrl = pullRequestUrl;
+      }
       await bounty.save();
 
-      logger.info(`Bounty ${bountyId} marked as claimed successfully`);
+      logger.info(`Bounty ${bountyId} marked as claimed successfully with status: ${bounty.status}`);
 
       return {
         success: true,
         transactionHash: bounty.claimTransactionHash,
-        amount: bounty.claimedAmount
+        amount: bounty.claimedAmount,
+        bounty: bounty // Return the updated bounty object
       };
     } catch (error) {
       logger.error(`Failed to claim bounty ${bountyId}:`, error);
