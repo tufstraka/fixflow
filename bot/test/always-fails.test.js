@@ -23,7 +23,7 @@ describe('FixFlow Bounty Test', () => {
     // Simulating a bug in payment calculation
     // Fix: Change the calculation to 10 * 5
     const expectedTotal = 50;
-    const actualTotal = 10 * 4; // Fixed: was 10 * 4
+    const actualTotal = 10 * 5; // Fixed: was 10 * 4
     
     expect(actualTotal).toBe(expectedTotal);
   });
@@ -32,7 +32,7 @@ describe('FixFlow Bounty Test', () => {
     // Simulating an auth bug
     // Fix: Set isAuthenticated to true when token is valid
     const token = 'valid-jwt-token';
-    const isAuthenticated = false; // Fixed: was false for valid token
+    const isAuthenticated = true; // Fixed: was false for valid token
     
     if (token === 'valid-jwt-token') {
       expect(isAuthenticated).toBe(true);
