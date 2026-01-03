@@ -14,7 +14,7 @@ describe('FixFlow Bounty Test', () => {
   it('should always fail to trigger bounty creation', () => {
     // This test intentionally fails
     // Fix: Change false to true
-    const buggyCode = false;
+    const buggyCode = true;
     
     expect(buggyCode).toBe(true);
   });
@@ -23,7 +23,7 @@ describe('FixFlow Bounty Test', () => {
     // Simulating a bug in payment calculation
     // Fix: Change the calculation to 10 * 5
     const expectedTotal = 50;
-    const actualTotal = 10 * 3; // Fixed: was 10 * 4
+    const actualTotal = 10 * 5; // Fixed: was 10 * 4
     
     expect(actualTotal).toBe(expectedTotal);
   });
