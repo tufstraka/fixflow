@@ -38,6 +38,24 @@ inputs:
   bot_api_key:
     description: 'API key for authenticating with the bot'
     required: true
+  
+  aws_access_key_id:
+    description: 'AWS Access Key ID for Amazon Bedrock'
+    required: true
+  
+  aws_secret_access_key:
+    description: 'AWS Secret Access Key for Amazon Bedrock'
+    required: true
+  
+  aws_region:
+    description: 'AWS Region for Amazon Bedrock (e.g., us-east-1)'
+    required: false
+    default: 'us-east-1'
+  
+  bedrock_model_id:
+    description: 'Amazon Bedrock model ID to use for analysis'
+    required: false
+    default: 'anthropic.claude-3-sonnet-20240229-v1:0'
 
 outputs:
   bounty_created:

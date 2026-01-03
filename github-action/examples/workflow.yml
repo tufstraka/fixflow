@@ -1,4 +1,4 @@
-name: FixFlow - Automated Bug Bounties
+name: FixFlow - Automated Bug Bounties with AI Analysis
 
 on:
   workflow_run:
@@ -24,6 +24,11 @@ jobs:
           bounty_amount: 50  # Default amount in MNEE
           max_bounty: 150   # Maximum after escalation
           config_file: .bounty-hunter.yml
+          # AWS Bedrock configuration for AI-powered failure analysis
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1
+          bedrock_model_id: anthropic.claude-3-sonnet-20240229-v1:0
         id: bounty
       
       - name: Bounty Created Summary
@@ -35,7 +40,7 @@ jobs:
 
 # Alternative: Trigger on push/PR with test job
 ---
-name: Tests with FixFlow
+name: Tests with FixFlow AI Analysis
 
 on:
   push:
@@ -71,10 +76,14 @@ jobs:
           bot_api_key: ${{ secrets.BOUNTY_HUNTER_API_KEY }}
           bounty_amount: 50
           on_failure_only: true
+          # AWS Bedrock for AI analysis
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: us-east-1
 
-# Example with custom configuration
+# Example with custom configuration and advanced AI options
 ---
-name: Custom Bounty Configuration
+name: Custom Bounty Configuration with AI
 
 on:
   workflow_dispatch:
@@ -83,6 +92,10 @@ on:
         description: 'Bounty amount in MNEE'
         required: false
         default: '75'
+      model_id:
+        description: 'Bedrock model ID for analysis'
+        required: false
+        default: 'anthropic.claude-3-sonnet-20240229-v1:0'
 
 jobs:
   test-and-bounty:
@@ -96,7 +109,7 @@ jobs:
         continue-on-error: true
         id: integration-tests
       
-      - name: Create Custom Bounty
+      - name: Create Custom Bounty with AI Analysis
         if: steps.integration-tests.outcome == 'failure'
         uses: bounty-hunter/bounty-hunter-action@v1
         with:
@@ -105,3 +118,30 @@ jobs:
           bot_api_key: ${{ secrets.BOUNTY_HUNTER_API_KEY }}
           bounty_amount: ${{ github.event.inputs.bounty_amount || '75' }}
           max_bounty: 300  # Higher max for integration tests
+          # AWS Bedrock configuration
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          bedrock_model_id: ${{ github.event.inputs.model_id }}
+
+# ============================================================================
+# REQUIRED SECRETS SETUP
+# ============================================================================
+# Add these secrets to your repository (Settings > Secrets and variables > Actions):
+#
+# BOUNTY_HUNTER_SERVER_URL - URL of your FixFlow bot server
+# BOUNTY_HUNTER_API_KEY    - API key for authenticating with the bot
+# AWS_ACCESS_KEY_ID        - AWS access key with Bedrock permissions
+# AWS_SECRET_ACCESS_KEY    - AWS secret access key
+# AWS_REGION               - (Optional) AWS region, defaults to us-east-1
+#
+# ============================================================================
+# SUPPORTED BEDROCK MODELS
+# ============================================================================
+# The following Claude models are recommended for failure analysis:
+#
+# - anthropic.claude-3-sonnet-20240229-v1:0 (default, good balance)
+# - anthropic.claude-3-haiku-20240307-v1:0 (faster, cheaper)
+# - anthropic.claude-3-opus-20240229-v1:0 (most capable, higher cost)
+#
+# Make sure the model is enabled in your AWS Bedrock console.
