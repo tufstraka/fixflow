@@ -415,10 +415,29 @@ async function handlePullRequest(event) {
         logger.warn(`[PR-WEBHOOK] ⚠ No issue references found in PR body. PR body was: "${pull_request.body?.substring(0, 200) || '(empty)'}"`);
       }
 
-      for (const issueNumber of referencedIssues) {
-        logger.info(`[PR-WEBHOOK] Processing issue #${issueNumber}...`);
-        await checkAndClaimBounty(repository.full_name, issueNumber, pull_request, installation?.id);
-      }
+      // Process ALL referenced issues - use Promise.allSettled to ensure all are processed
+      // even if some fail
+      const results = await Promise.allSettled(
+        referencedIssues.map(async (issueNumber) => {
+          logger.info(`[PR-WEBHOOK] Processing issue #${issueNumber}...`);
+          await checkAndClaimBounty(repository.full_name, issueNumber, pull_request, installation?.id);
+          return issueNumber;
+        })
+      );
+      
+      // Log results for each issue
+      results.forEach((result, index) => {
+        const issueNumber = referencedIssues[index];
+        if (result.status === 'fulfilled') {
+          logger.info(`[PR-WEBHOOK] ✓ Issue #${issueNumber} processed successfully`);
+        } else {
+          logger.error(`[PR-WEBHOOK] ✗ Issue #${issueNumber} processing failed: ${result.reason?.message || result.reason}`);
+        }
+      });
+      
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failCount = results.filter(r => r.status === 'rejected').length;
+      logger.info(`[PR-WEBHOOK] Processed ${referencedIssues.length} issues: ${successCount} succeeded, ${failCount} failed`);
       
       logger.info(`[PR-WEBHOOK] ========== PR EVENT PROCESSING COMPLETE ==========`);
     } else {
@@ -469,10 +488,29 @@ async function handleWorkflowRun(event) {
         const referencedIssues = extractReferencedIssues(pullRequest.body || '');
         logger.info(`[WORKFLOW-WEBHOOK] Referenced issues: ${referencedIssues.length > 0 ? referencedIssues.join(', ') : 'NONE'}`);
 
-        for (const issueNumber of referencedIssues) {
-          logger.info(`[WORKFLOW-WEBHOOK] Checking bounty for issue #${issueNumber}...`);
-          await checkAndClaimBounty(workflow_run.repository.full_name, issueNumber, pullRequest, installation?.id);
-        }
+        // Process ALL referenced issues - use Promise.allSettled to ensure all are processed
+        // even if some fail
+        const results = await Promise.allSettled(
+          referencedIssues.map(async (issueNumber) => {
+            logger.info(`[WORKFLOW-WEBHOOK] Checking bounty for issue #${issueNumber}...`);
+            await checkAndClaimBounty(workflow_run.repository.full_name, issueNumber, pullRequest, installation?.id);
+            return issueNumber;
+          })
+        );
+        
+        // Log results for each issue
+        results.forEach((result, index) => {
+          const issueNumber = referencedIssues[index];
+          if (result.status === 'fulfilled') {
+            logger.info(`[WORKFLOW-WEBHOOK] ✓ Issue #${issueNumber} processed successfully`);
+          } else {
+            logger.error(`[WORKFLOW-WEBHOOK] ✗ Issue #${issueNumber} processing failed: ${result.reason?.message || result.reason}`);
+          }
+        });
+        
+        const successCount = results.filter(r => r.status === 'fulfilled').length;
+        const failCount = results.filter(r => r.status === 'rejected').length;
+        logger.info(`[WORKFLOW-WEBHOOK] Processed ${referencedIssues.length} issues: ${successCount} succeeded, ${failCount} failed`);
       } else {
         logger.info(`[WORKFLOW-WEBHOOK] ✗ No PRs associated with this workflow run`);
       }
@@ -533,21 +571,44 @@ function extractReferencedIssues(body) {
   
   const issues = new Set();
 
-  // Common patterns: fixes #123, closes #123, resolves #123
-  // Also handles "Fixes: #123" (with colon) variant
-  const patterns = [
-    /(?:fixes|closes|resolves|fix|close|resolve):?\s+#(\d+)/gi,
-    /(?:fixes|closes|resolves|fix|close|resolve):?\s+(?:https?:\/\/github\.com\/[\w-]+\/[\w-]+\/issues\/)(\d+)/gi
-  ];
+  // Pattern 1: Single issue references like "fixes #123", "closes #123"
+  const singleIssuePattern = /(?:fixes|closes|resolves|fix|close|resolve):?\s+#(\d+)/gi;
+  
+  // Pattern 2: Full URL references
+  const urlPattern = /(?:fixes|closes|resolves|fix|close|resolve):?\s+(?:https?:\/\/github\.com\/[\w-]+\/[\w-]+\/issues\/)(\d+)/gi;
+  
+  // Pattern 3: Multiple issues after one keyword - "Fixes #52 #53 #54" or "Fixes #52, #53, #54"
+  // This matches the keyword followed by a chain of issue numbers
+  const multiIssuePattern = /(?:fixes|closes|resolves|fix|close|resolve):?\s+((?:#\d+[\s,and]*)+)/gi;
 
-  for (let i = 0; i < patterns.length; i++) {
-    const pattern = patterns[i];
+  // First, handle the multi-issue pattern
+  let multiMatch;
+  while ((multiMatch = multiIssuePattern.exec(body)) !== null) {
+    const issueChain = multiMatch[1];
+    logger.info(`[EXTRACT-ISSUES] ✓ Found issue chain: "${issueChain}"`);
+    
+    // Extract all issue numbers from the chain
+    const issueNumbers = issueChain.match(/#(\d+)/g);
+    if (issueNumbers) {
+      issueNumbers.forEach(num => {
+        const issueNum = parseInt(num.replace('#', ''));
+        logger.info(`[EXTRACT-ISSUES] ✓ Extracted issue #${issueNum} from chain`);
+        issues.add(issueNum);
+      });
+    }
+  }
+
+  // Also try single patterns as fallback (in case format is different)
+  const singlePatterns = [singleIssuePattern, urlPattern];
+  for (let i = 0; i < singlePatterns.length; i++) {
+    const pattern = singlePatterns[i];
     let match;
-    // Reset lastIndex since we're reusing patterns
     pattern.lastIndex = 0;
     while ((match = pattern.exec(body)) !== null) {
-      logger.info(`[EXTRACT-ISSUES] ✓ Found issue reference: #${match[1]} (pattern ${i + 1}, match: "${match[0]}")`);
-      issues.add(parseInt(match[1]));
+      if (!issues.has(parseInt(match[1]))) {
+        logger.info(`[EXTRACT-ISSUES] ✓ Found issue reference: #${match[1]} (pattern ${i + 1}, match: "${match[0]}")`);
+        issues.add(parseInt(match[1]));
+      }
     }
   }
 
