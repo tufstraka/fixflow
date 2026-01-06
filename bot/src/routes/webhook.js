@@ -1125,13 +1125,46 @@ For help with MNEE wallets, visit [docs.mnee.io](https://docs.mnee.io).`;
     logger.info(`[CLAIM-BOUNTY]   - To: ${solverAddress}`);
     logger.info(`[CLAIM-BOUNTY]   - Amount: ${bounty.currentAmount} MNEE`);
     logger.info(`[CLAIM-BOUNTY]   - Bounty ID: ${bounty.bountyId}`);
-    logger.info(`[CLAIM-BOUNTY]   - Payment method: ${isEthereumAddress ? 'Blockchain (ERC-20)' : 'MNEE SDK'}`);
+    logger.info(`[CLAIM-BOUNTY]   - On-Chain Bounty ID: ${bounty.onChainBountyId || 'N/A'}`);
+    logger.info(`[CLAIM-BOUNTY]   - Funding Source: ${bounty.fundingSource || 'platform'}`);
+    
+    // Determine payment method based on:
+    // 1. If bounty has onChainBountyId -> use releaseBounty (escrow contract releases funds)
+    // 2. If Ethereum address without onChainBountyId -> direct transfer from bot wallet
+    // 3. If MNEE address -> use MNEE SDK
+    const hasOnChainBounty = bounty.onChainBountyId && process.env.USE_BLOCKCHAIN === 'true';
+    logger.info(`[CLAIM-BOUNTY]   - Has on-chain bounty: ${hasOnChainBounty}`);
+    logger.info(`[CLAIM-BOUNTY]   - Payment method: ${hasOnChainBounty ? 'Escrow Release' : (isEthereumAddress ? 'Direct ERC-20 Transfer' : 'MNEE SDK')}`);
     
     let paymentResult;
     try {
-      if (isEthereumAddress && process.env.USE_BLOCKCHAIN === 'true') {
-        // Use Ethereum payment service for ERC-20 transfers
-        logger.info(`[CLAIM-BOUNTY] Using Ethereum payment service for ERC-20 transfer`);
+      if (hasOnChainBounty && isEthereumAddress) {
+        // Bounty was funded through escrow contract - use releaseBounty to release from contract
+        logger.info(`[CLAIM-BOUNTY] Using escrow contract releaseBounty for on-chain bounty ${bounty.onChainBountyId}`);
+        
+        // Initialize if not already
+        if (!ethereumPaymentService.initialized) {
+          await ethereumPaymentService.initialize();
+        }
+        
+        paymentResult = await ethereumPaymentService.releaseBounty(
+          bounty.onChainBountyId,
+          solverAddress,
+          pullRequest.user.login,
+          pullRequest.html_url
+        );
+        
+        // Map the result to expected format
+        paymentResult = {
+          success: paymentResult.success,
+          transactionId: paymentResult.transactionId,
+          amount: paymentResult.amount,
+          recipient: solverAddress
+        };
+      } else if (isEthereumAddress && process.env.USE_BLOCKCHAIN === 'true') {
+        // Ethereum address but no on-chain bounty - direct transfer from bot wallet
+        // This is for backwards compatibility with bounties created before escrow
+        logger.info(`[CLAIM-BOUNTY] Using direct ERC-20 transfer (no on-chain bounty)`);
         
         // Initialize if not already
         if (!ethereumPaymentService.initialized) {
