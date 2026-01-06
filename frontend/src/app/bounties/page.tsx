@@ -11,6 +11,16 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+// Helper function to truncate addresses for display
+const truncateAddress = (address: string): string => {
+  if (!address) return 'Unknown';
+  // If it's an Ethereum address (0x...) or long address, truncate it
+  if (address.length > 20) {
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  }
+  return address;
+};
+
 export default function BountiesPage() {
   const { isDemo } = useAuth();
   const [bounties, setBounties] = useState<Bounty[]>([]);
@@ -325,10 +335,15 @@ export default function BountiesPage() {
                             group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5" />
                         </a>
                       ) : (
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <span className="font-medium">{bounty.solver || 'Unknown'}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-sm text-gray-600 min-w-0 flex-1">
+                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            <span
+                              className="font-medium truncate"
+                              title={bounty.solver || 'Unknown'}
+                            >
+                              {truncateAddress(bounty.solver || '')}
+                            </span>
                           </div>
                           {bounty.pullRequestUrl && (
                             <a
@@ -337,7 +352,7 @@ export default function BountiesPage() {
                               rel="noopener noreferrer"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg
                                 border border-gray-200 text-gray-600 text-sm font-medium
-                                hover:bg-gray-50 hover:border-gray-300 transition-colors"
+                                hover:bg-gray-50 hover:border-gray-300 transition-colors flex-shrink-0"
                             >
                               View PR
                             </a>

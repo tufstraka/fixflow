@@ -286,7 +286,7 @@ function WalletDropdown({
       />
       
       {/* Dropdown */}
-      <div className="absolute right-0 top-full mt-2 w-72 glass-card p-4 shadow-xl z-50 animate-slide-down">
+      <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl border border-gray-200 shadow-xl p-4 z-50 animate-scale-in origin-top-right">
         <div className="space-y-3">
           {/* Address */}
           <div className="p-3 rounded-xl bg-warm-50">
