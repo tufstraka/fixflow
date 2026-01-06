@@ -12,13 +12,13 @@ import githubAppService from '../services/githubApp.js';
 import db from '../db.js';
 
 // Verify GitHub webhook signature
-function verifyWebhookSignature(payload, signature) {
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
-  if (!secret) {
+function verifyWebhookSignature(payload, signature, secret = null) {
+  const webhookSecret = secret || process.env.GITHUB_WEBHOOK_SECRET;
+  if (!webhookSecret) {
     logger.warn('GITHUB_WEBHOOK_SECRET not configured');
     return false;
   }
-  const hmac = crypto.createHmac('sha256', secret);
+  const hmac = crypto.createHmac('sha256', webhookSecret);
   const digest = 'sha256=' + hmac.update(payload).digest('hex');
   try {
     return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
@@ -355,6 +355,339 @@ The MNEE payment has been successfully processed.`
     res.status(500).json({ error: 'Internal error' });
   }
 });
+
+/**
+ * GitHub Marketplace Webhook - Receives subscription events from GitHub Marketplace
+ *
+ * POST /webhooks/marketplace
+ *
+ * This endpoint handles GitHub Marketplace events for app purchases and subscriptions:
+ * - purchased: User purchased a plan
+ * - pending_change: User requested a plan change (requires approval)
+ * - pending_change_cancelled: User cancelled a pending plan change
+ * - changed: Plan was changed
+ * - cancelled: User cancelled their subscription
+ *
+ * Required Headers:
+ * - X-Hub-Signature-256: HMAC signature for verification
+ * - X-GitHub-Event: Should be 'marketplace_purchase'
+ *
+ * Request Body (example):
+ * {
+ *   "action": "purchased",
+ *   "effective_date": "2026-01-06T00:00:00+00:00",
+ *   "sender": { "login": "username", "id": 123 },
+ *   "marketplace_purchase": {
+ *     "account": { "login": "org_name", "id": 456, "type": "Organization" },
+ *     "billing_cycle": "monthly",
+ *     "unit_count": 1,
+ *     "on_free_trial": false,
+ *     "free_trial_ends_on": null,
+ *     "next_billing_date": "2026-02-06T00:00:00+00:00",
+ *     "plan": {
+ *       "id": 1234,
+ *       "name": "Pro Plan",
+ *       "description": "Pro plan with unlimited bounties",
+ *       "monthly_price_in_cents": 2900,
+ *       "yearly_price_in_cents": 29900,
+ *       "price_model": "FLAT_RATE",
+ *       "has_free_trial": true,
+ *       "unit_name": null,
+ *       "bullets": ["Unlimited bounties", "Priority support", "Custom escalation rules"]
+ *     }
+ *   },
+ *   "previous_marketplace_purchase": null
+ * }
+ */
+router.post('/marketplace', async (req, res) => {
+  try {
+    // Verify signature using marketplace secret (or fall back to regular webhook secret)
+    const signature = req.headers['x-hub-signature-256'];
+    if (!signature) {
+      logger.warn('[MARKETPLACE] Missing signature header');
+      return res.status(401).json({ error: 'Missing signature' });
+    }
+
+    const payload = JSON.stringify(req.body);
+    const marketplaceSecret = process.env.GITHUB_MARKETPLACE_SECRET || process.env.GITHUB_WEBHOOK_SECRET;
+    
+    if (!verifyWebhookSignature(payload, signature, marketplaceSecret)) {
+      logger.error('[MARKETPLACE] Invalid webhook signature');
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    const eventType = req.headers['x-github-event'];
+    
+    if (eventType !== 'marketplace_purchase') {
+      logger.info(`[MARKETPLACE] Ignoring non-marketplace event: ${eventType}`);
+      return res.status(200).json({ received: true, ignored: true });
+    }
+
+    const event = req.body;
+    const { action, effective_date, sender, marketplace_purchase, previous_marketplace_purchase } = event;
+
+    logger.info('[MARKETPLACE] ========== MARKETPLACE EVENT ==========');
+    logger.info(`[MARKETPLACE] Action: ${action}`);
+    logger.info(`[MARKETPLACE] Effective Date: ${effective_date}`);
+    logger.info(`[MARKETPLACE] Sender: ${sender?.login} (ID: ${sender?.id})`);
+    
+    if (marketplace_purchase) {
+      const { account, billing_cycle, unit_count, on_free_trial, plan } = marketplace_purchase;
+      logger.info(`[MARKETPLACE] Account: ${account?.login} (${account?.type}, ID: ${account?.id})`);
+      logger.info(`[MARKETPLACE] Billing Cycle: ${billing_cycle}`);
+      logger.info(`[MARKETPLACE] Unit Count: ${unit_count}`);
+      logger.info(`[MARKETPLACE] Free Trial: ${on_free_trial}`);
+      logger.info(`[MARKETPLACE] Plan: ${plan?.name} (ID: ${plan?.id})`);
+      logger.info(`[MARKETPLACE] Plan Price: $${(plan?.monthly_price_in_cents / 100).toFixed(2)}/month`);
+    }
+
+    // Handle different marketplace actions
+    await handleMarketplaceEvent(action, event);
+
+    logger.info('[MARKETPLACE] ========== MARKETPLACE EVENT COMPLETE ==========');
+    res.status(200).json({ received: true, action });
+  } catch (error) {
+    logger.error('[MARKETPLACE] Error processing marketplace webhook:', error);
+    logger.error(`[MARKETPLACE] Error stack: ${error.stack}`);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Handle GitHub Marketplace events
+ */
+async function handleMarketplaceEvent(action, event) {
+  const { marketplace_purchase, previous_marketplace_purchase, sender, effective_date } = event;
+  const account = marketplace_purchase?.account;
+  const plan = marketplace_purchase?.plan;
+
+  try {
+    switch (action) {
+      case 'purchased':
+        await handlePurchase(account, plan, marketplace_purchase, sender, effective_date);
+        break;
+      case 'pending_change':
+        await handlePendingChange(account, plan, marketplace_purchase, previous_marketplace_purchase);
+        break;
+      case 'pending_change_cancelled':
+        await handlePendingChangeCancelled(account, marketplace_purchase);
+        break;
+      case 'changed':
+        await handlePlanChange(account, plan, marketplace_purchase, previous_marketplace_purchase);
+        break;
+      case 'cancelled':
+        await handleCancellation(account, marketplace_purchase, effective_date);
+        break;
+      default:
+        logger.warn(`[MARKETPLACE] Unknown action: ${action}`);
+    }
+  } catch (error) {
+    logger.error(`[MARKETPLACE] Error handling ${action}:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Handle new subscription purchase
+ */
+async function handlePurchase(account, plan, purchase, sender, effectiveDate) {
+  logger.info(`[MARKETPLACE-PURCHASE] New subscription for ${account.login}`);
+  logger.info(`[MARKETPLACE-PURCHASE] Plan: ${plan.name}, Billing: ${purchase.billing_cycle}`);
+  logger.info(`[MARKETPLACE-PURCHASE] Free trial: ${purchase.on_free_trial}, Trial ends: ${purchase.free_trial_ends_on || 'N/A'}`);
+
+  try {
+    // Check if account already exists
+    const { rows: existingRows } = await db.query(
+      'SELECT * FROM marketplace_subscriptions WHERE github_account_id = $1',
+      [account.id]
+    );
+
+    const subscriptionData = {
+      github_account_id: account.id,
+      github_account_login: account.login,
+      github_account_type: account.type,
+      plan_id: plan.id,
+      plan_name: plan.name,
+      billing_cycle: purchase.billing_cycle,
+      unit_count: purchase.unit_count,
+      on_free_trial: purchase.on_free_trial,
+      free_trial_ends_on: purchase.free_trial_ends_on,
+      next_billing_date: purchase.next_billing_date,
+      status: 'active',
+      purchased_by: sender.login,
+      effective_date: effectiveDate,
+      metadata: JSON.stringify({
+        plan_description: plan.description,
+        monthly_price_cents: plan.monthly_price_in_cents,
+        yearly_price_cents: plan.yearly_price_in_cents,
+        price_model: plan.price_model,
+        bullets: plan.bullets
+      })
+    };
+
+    if (existingRows.length > 0) {
+      // Update existing subscription
+      await db.query(`
+        UPDATE marketplace_subscriptions SET
+          plan_id = $1, plan_name = $2, billing_cycle = $3, unit_count = $4,
+          on_free_trial = $5, free_trial_ends_on = $6, next_billing_date = $7,
+          status = $8, purchased_by = $9, effective_date = $10, metadata = $11,
+          updated_at = NOW()
+        WHERE github_account_id = $12
+      `, [
+        subscriptionData.plan_id, subscriptionData.plan_name, subscriptionData.billing_cycle,
+        subscriptionData.unit_count, subscriptionData.on_free_trial, subscriptionData.free_trial_ends_on,
+        subscriptionData.next_billing_date, subscriptionData.status, subscriptionData.purchased_by,
+        subscriptionData.effective_date, subscriptionData.metadata, account.id
+      ]);
+      logger.info(`[MARKETPLACE-PURCHASE] ✓ Updated subscription for ${account.login}`);
+    } else {
+      // Create new subscription
+      await db.query(`
+        INSERT INTO marketplace_subscriptions (
+          github_account_id, github_account_login, github_account_type,
+          plan_id, plan_name, billing_cycle, unit_count,
+          on_free_trial, free_trial_ends_on, next_billing_date,
+          status, purchased_by, effective_date, metadata, created_at, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW(), NOW())
+      `, [
+        subscriptionData.github_account_id, subscriptionData.github_account_login,
+        subscriptionData.github_account_type, subscriptionData.plan_id, subscriptionData.plan_name,
+        subscriptionData.billing_cycle, subscriptionData.unit_count, subscriptionData.on_free_trial,
+        subscriptionData.free_trial_ends_on, subscriptionData.next_billing_date, subscriptionData.status,
+        subscriptionData.purchased_by, subscriptionData.effective_date, subscriptionData.metadata
+      ]);
+      logger.info(`[MARKETPLACE-PURCHASE] ✓ Created new subscription for ${account.login}`);
+    }
+  } catch (dbError) {
+    // If table doesn't exist, log the subscription info but don't fail
+    if (dbError.code === '42P01') {
+      logger.warn('[MARKETPLACE-PURCHASE] marketplace_subscriptions table does not exist');
+      logger.info('[MARKETPLACE-PURCHASE] Subscription data:', JSON.stringify({
+        account: account.login,
+        plan: plan.name,
+        billing: purchase.billing_cycle,
+        free_trial: purchase.on_free_trial
+      }));
+    } else {
+      throw dbError;
+    }
+  }
+}
+
+/**
+ * Handle pending plan change (user requested upgrade/downgrade)
+ */
+async function handlePendingChange(account, newPlan, purchase, previousPurchase) {
+  const oldPlan = previousPurchase?.plan;
+  
+  logger.info(`[MARKETPLACE-PENDING] Pending plan change for ${account.login}`);
+  logger.info(`[MARKETPLACE-PENDING] From: ${oldPlan?.name || 'Unknown'} -> To: ${newPlan.name}`);
+  logger.info(`[MARKETPLACE-PENDING] Will take effect at next billing cycle`);
+
+  try {
+    await db.query(`
+      UPDATE marketplace_subscriptions SET
+        pending_plan_id = $1, pending_plan_name = $2,
+        pending_change_effective_date = $3, updated_at = NOW()
+      WHERE github_account_id = $4
+    `, [newPlan.id, newPlan.name, purchase.next_billing_date, account.id]);
+    logger.info(`[MARKETPLACE-PENDING] ✓ Recorded pending change for ${account.login}`);
+  } catch (dbError) {
+    if (dbError.code === '42P01' || dbError.code === '42703') {
+      logger.warn('[MARKETPLACE-PENDING] Could not update subscription (table/column may not exist)');
+    } else {
+      throw dbError;
+    }
+  }
+}
+
+/**
+ * Handle pending change cancellation
+ */
+async function handlePendingChangeCancelled(account, purchase) {
+  logger.info(`[MARKETPLACE-PENDING-CANCEL] Pending change cancelled for ${account.login}`);
+  logger.info(`[MARKETPLACE-PENDING-CANCEL] Staying on current plan: ${purchase.plan?.name}`);
+
+  try {
+    await db.query(`
+      UPDATE marketplace_subscriptions SET
+        pending_plan_id = NULL, pending_plan_name = NULL,
+        pending_change_effective_date = NULL, updated_at = NOW()
+      WHERE github_account_id = $1
+    `, [account.id]);
+    logger.info(`[MARKETPLACE-PENDING-CANCEL] ✓ Cleared pending change for ${account.login}`);
+  } catch (dbError) {
+    if (dbError.code === '42P01' || dbError.code === '42703') {
+      logger.warn('[MARKETPLACE-PENDING-CANCEL] Could not update subscription');
+    } else {
+      throw dbError;
+    }
+  }
+}
+
+/**
+ * Handle plan change (immediate or scheduled)
+ */
+async function handlePlanChange(account, newPlan, purchase, previousPurchase) {
+  const oldPlan = previousPurchase?.plan;
+  
+  logger.info(`[MARKETPLACE-CHANGE] Plan changed for ${account.login}`);
+  logger.info(`[MARKETPLACE-CHANGE] From: ${oldPlan?.name || 'Unknown'} -> To: ${newPlan.name}`);
+  logger.info(`[MARKETPLACE-CHANGE] New billing cycle: ${purchase.billing_cycle}`);
+
+  try {
+    await db.query(`
+      UPDATE marketplace_subscriptions SET
+        plan_id = $1, plan_name = $2, billing_cycle = $3,
+        unit_count = $4, next_billing_date = $5,
+        pending_plan_id = NULL, pending_plan_name = NULL,
+        pending_change_effective_date = NULL,
+        metadata = metadata || $6::jsonb, updated_at = NOW()
+      WHERE github_account_id = $7
+    `, [
+      newPlan.id, newPlan.name, purchase.billing_cycle,
+      purchase.unit_count, purchase.next_billing_date,
+      JSON.stringify({
+        previous_plan: oldPlan?.name,
+        changed_at: new Date().toISOString()
+      }),
+      account.id
+    ]);
+    logger.info(`[MARKETPLACE-CHANGE] ✓ Updated plan for ${account.login}`);
+  } catch (dbError) {
+    if (dbError.code === '42P01') {
+      logger.warn('[MARKETPLACE-CHANGE] marketplace_subscriptions table does not exist');
+    } else {
+      throw dbError;
+    }
+  }
+}
+
+/**
+ * Handle subscription cancellation
+ */
+async function handleCancellation(account, purchase, effectiveDate) {
+  logger.info(`[MARKETPLACE-CANCEL] Subscription cancelled for ${account.login}`);
+  logger.info(`[MARKETPLACE-CANCEL] Effective date: ${effectiveDate}`);
+  logger.info(`[MARKETPLACE-CANCEL] Plan was: ${purchase.plan?.name}`);
+
+  try {
+    await db.query(`
+      UPDATE marketplace_subscriptions SET
+        status = 'cancelled', cancelled_at = $1,
+        cancellation_effective_date = $2, updated_at = NOW()
+      WHERE github_account_id = $3
+    `, [new Date().toISOString(), effectiveDate, account.id]);
+    logger.info(`[MARKETPLACE-CANCEL] ✓ Marked subscription as cancelled for ${account.login}`);
+  } catch (dbError) {
+    if (dbError.code === '42P01' || dbError.code === '42703') {
+      logger.warn('[MARKETPLACE-CANCEL] Could not update subscription');
+    } else {
+      throw dbError;
+    }
+  }
+}
 
 // Handle installation webhook events
 async function handleInstallation(event) {

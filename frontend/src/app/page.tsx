@@ -425,34 +425,52 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="py-12 border-t border-gray-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 
-                flex items-center justify-center">
-                <Zap className="w-4 h-4 text-white" />
+          <div className="flex flex-col gap-8">
+            {/* Main Footer Content */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              {/* Logo */}
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600
+                  flex items-center justify-center">
+                  <Zap className="w-4 h-4 text-white" />
+                </div>
+                <span className="font-bold text-gray-900">FixFlow</span>
               </div>
-              <span className="font-bold text-gray-900">FixFlow</span>
+
+              {/* Primary Links */}
+              <div className="flex items-center gap-8 text-sm text-gray-500">
+                <Link href="/bounties" className="hover:text-gray-900 transition-colors">
+                  Explore
+                </Link>
+                <a href="https://github.com" target="_blank" rel="noopener noreferrer"
+                  className="hover:text-gray-900 transition-colors">
+                  GitHub
+                </a>
+                <a href="https://mnee.io" target="_blank" rel="noopener noreferrer"
+                  className="hover:text-gray-900 transition-colors">
+                  MNEE
+                </a>
+              </div>
+
+              {/* Copyright */}
+              <div className="text-sm text-gray-400">
+                Powered by MNEE Stablecoin
+              </div>
             </div>
 
-            {/* Links */}
-            <div className="flex items-center gap-8 text-sm text-gray-500">
-              <Link href="/bounties" className="hover:text-gray-900 transition-colors">
-                Explore
-              </Link>
-              <a href="https://github.com" target="_blank" rel="noopener noreferrer" 
-                className="hover:text-gray-900 transition-colors">
-                GitHub
-              </a>
-              <a href="https://mnee.io" target="_blank" rel="noopener noreferrer" 
-                className="hover:text-gray-900 transition-colors">
-                MNEE
-              </a>
-            </div>
-
-            {/* Copyright */}
-            <div className="text-sm text-gray-400">
-              Powered by MNEE Stablecoin
+            {/* Legal Links Divider */}
+            <div className="border-t border-gray-100 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-6 text-sm text-gray-400">
+                <Link href="/privacy" className="hover:text-gray-600 transition-colors">
+                  Privacy Policy
+                </Link>
+                <Link href="/terms" className="hover:text-gray-600 transition-colors">
+                  Terms of Service
+                </Link>
+              </div>
+              <div className="text-sm text-gray-400">
+                © {new Date().getFullYear()} FixFlow. All rights reserved.
+              </div>
             </div>
           </div>
         </div>
