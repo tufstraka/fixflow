@@ -160,11 +160,6 @@ export function Navigation() {
               {/* Blockchain Mode Badge */}
               {isBlockchainMode && (
                 <div className="hidden md:flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg 
-                    bg-accent-50 border border-accent-200">
-                    <Hexagon className="w-3.5 h-3.5 text-accent-600" />
-                    <span className="text-xs font-semibold text-accent-700">ETH</span>
-                  </div>
                   <WalletConnect variant="compact" />
                 </div>
               )}

@@ -17,7 +17,6 @@ interface Web3ContextType {
   isConnecting: boolean;
   walletInfo: WalletInfo | null;
   error: string | null;
-  // Convenience properties (derived from walletInfo)
   address: string | null;
   balance: string | null;
   chainId: number | null;
@@ -32,7 +31,6 @@ interface Web3ContextType {
 
 const Web3Context = createContext<Web3ContextType | undefined>(undefined);
 
-// MNEE Token info
 const MNEE_TOKEN = {
   address: '0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF',
   symbol: 'MNEE',
