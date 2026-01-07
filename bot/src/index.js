@@ -6,7 +6,7 @@ import bodyParser from 'body-parser';
 import cron from 'node-cron';
 
 import logger from './utils/logger.js';
-import authMiddleware from './middleware/auth.js';
+import authMiddleware, { adminAuth } from './middleware/auth.js';
 import bountyRoutes from './routes/bounty.js';
 import webhookRoutes from './routes/webhook.js';
 import adminRoutes from './routes/admin.js';
@@ -72,8 +72,12 @@ app.use('/api/bounties', publicBountyRoutes);
 
 // Authenticated API Routes
 app.use('/api/bounties', authMiddleware, bountyRoutes);
+<<<<<<< Updated upstream
 app.use('/api/admin', adminRoutes); // Admin routes have their own auth middleware that supports both API key and session-based admin auth
 app.use('/api/projects', projectRoutes); // Project settings and owner-funded bounties
+=======
+app.use('/api/admin', adminAuth, adminRoutes);
+>>>>>>> Stashed changes
 app.use('/api/user', userRoutes); // User authentication and profile routes
 app.use('/webhooks', webhookRoutes); // Webhook endpoints (GitHub, MNEE status, create-bounty)
 app.use('/github', githubRoutes); // GitHub App OAuth and installation callbacks

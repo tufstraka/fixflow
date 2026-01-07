@@ -98,6 +98,10 @@ class Bounty {
       claimedAt: row.claimed_at,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
+<<<<<<< Updated upstream
+=======
+      // Owner-funded bounty fields
+>>>>>>> Stashed changes
       creatorWalletAddress: row.creator_wallet_address,
       fundingSource: row.funding_source,
       onChainBountyId: row.on_chain_bounty_id
@@ -112,27 +116,36 @@ class Bounty {
       // Update
       const text = `
         UPDATE bounties SET
-          current_amount = $1,
-          status = $2,
-          solver = $3,
-          solver_github_login = $4,
-          claimed_amount = $5,
-          claim_transaction_hash = $6,
-          pull_request_url = $7,
-          escalation_count = $8,
-          last_escalation = $9,
-          metadata = $10,
-          claimed_at = $11,
-          updated_at = $12
-        WHERE id = $13
+          initial_amount = $1,
+          current_amount = $2,
+          max_amount = $3,
+          status = $4,
+          solver = $5,
+          solver_github_login = $6,
+          claimed_amount = $7,
+          transaction_hash = $8,
+          claim_transaction_hash = $9,
+          pull_request_url = $10,
+          escalation_count = $11,
+          last_escalation = $12,
+          metadata = $13,
+          claimed_at = $14,
+          updated_at = $15,
+          creator_wallet_address = $16,
+          funding_source = $17,
+          on_chain_bounty_id = $18
+        WHERE id = $19
         RETURNING *
       `;
       const values = [
+        this.initialAmount,
         this.currentAmount,
+        this.maxAmount,
         this.status,
         this.solver,
         this.solverGithubLogin,
         this.claimedAmount,
+        this.transactionHash,
         this.claimTransactionHash,
         this.pullRequestUrl,
         this.escalationCount,
@@ -140,6 +153,9 @@ class Bounty {
         this.metadata,
         this.claimedAt,
         this.updatedAt,
+        this.creatorWalletAddress,
+        this.fundingSource,
+        this.onChainBountyId,
         this.id
       ];
       const { rows } = await db.query(text, values);
