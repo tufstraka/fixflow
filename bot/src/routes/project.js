@@ -303,6 +303,10 @@ router.get('/funding-info', async (req, res) => {
  * Record on-chain bounty creation
  * Called by frontend after user creates bounty via smart contract
  * POST /api/projects/:owner/:repo/bounties/on-chain
+ *
+ * This endpoint handles two scenarios:
+ * 1. New bounty: Creates a new bounty record in the database
+ * 2. Existing unfunded bounty: Updates an existing bounty (e.g., from GitHub Actions) with on-chain funding info
  */
 router.post('/:owner/:repo/bounties/on-chain', authenticateUser, async (req, res) => {
   try {
@@ -318,6 +322,16 @@ router.post('/:owner/:repo/bounties/on-chain', authenticateUser, async (req, res
       creatorWalletAddress
     } = req.body;
 
+    logger.info(`[On-Chain Bounty] Recording bounty for ${repository}#${issueId}`);
+    logger.info(`[On-Chain Bounty] Request data:`, {
+      issueId,
+      amount,
+      maxAmount,
+      transactionHash,
+      onChainBountyId,
+      creatorWalletAddress
+    });
+
     // Validate required fields
     if (!issueId || !amount || !transactionHash) {
       return res.status(400).json({
@@ -328,14 +342,81 @@ router.post('/:owner/:repo/bounties/on-chain', authenticateUser, async (req, res
 
     // Check if bounty already exists for this issue
     const existingBounty = await Bounty.findOne({ repository, issueId });
+    
     if (existingBounty) {
+      logger.info(`[On-Chain Bounty] Found existing bounty:`, {
+        bountyId: existingBounty.bountyId,
+        onChainBountyId: existingBounty.onChainBountyId,
+        status: existingBounty.status,
+        fundingSource: existingBounty.fundingSource,
+        transactionHash: existingBounty.transactionHash
+      });
+      
+      // If existing bounty already has an onChainBountyId with a different ID, it's a duplicate
+      if (existingBounty.onChainBountyId && onChainBountyId &&
+          existingBounty.onChainBountyId !== onChainBountyId) {
+        logger.warn(`[On-Chain Bounty] Duplicate: existing has onChainBountyId ${existingBounty.onChainBountyId}, new has ${onChainBountyId}`);
+        return res.status(400).json({
+          error: 'Bounty exists',
+          message: `A bounty already exists for this issue with on-chain ID ${existingBounty.onChainBountyId}`
+        });
+      }
+      
+      // If existing bounty has the same transaction hash, this is a retry - return success
+      if (existingBounty.transactionHash === transactionHash) {
+        logger.info(`[On-Chain Bounty] Same transaction hash - returning existing bounty`);
+        return res.json({
+          success: true,
+          message: 'Bounty already recorded with this transaction',
+          bounty: existingBounty.toJSON()
+        });
+      }
+      
+      // If existing bounty doesn't have on-chain funding info, update it
+      if (!existingBounty.onChainBountyId) {
+        logger.info(`[On-Chain Bounty] Updating existing bounty with on-chain info`);
+        
+        existingBounty.onChainBountyId = onChainBountyId;
+        existingBounty.transactionHash = transactionHash;
+        existingBounty.fundingSource = 'owner';
+        existingBounty.creatorWalletAddress = creatorWalletAddress || req.user.ethereumAddress;
+        existingBounty.initialAmount = amount;
+        existingBounty.currentAmount = amount;
+        existingBounty.maxAmount = maxAmount || amount * 3;
+        existingBounty.metadata = {
+          ...existingBounty.metadata,
+          createdBy: req.user.githubLogin,
+          fundedOnChain: true,
+          fundedAt: new Date().toISOString()
+        };
+        
+        await existingBounty.save();
+        
+        logger.info(`[On-Chain Bounty] Updated existing bounty ${existingBounty.bountyId} with on-chain info`);
+        
+        return res.json({
+          success: true,
+          message: 'Existing bounty updated with on-chain funding',
+          bounty: existingBounty.toJSON()
+        });
+      }
+      
+      // Existing bounty already has on-chain info
+      logger.warn(`[On-Chain Bounty] Bounty already funded on-chain`);
       return res.status(400).json({
-        error: 'Bounty exists',
-        message: 'A bounty already exists for this issue'
+        error: 'Bounty already funded',
+        message: 'This bounty is already funded on-chain',
+        existingBounty: {
+          bountyId: existingBounty.bountyId,
+          onChainBountyId: existingBounty.onChainBountyId,
+          status: existingBounty.status
+        }
       });
     }
 
-    // Create bounty record
+    // Create new bounty record
+    logger.info(`[On-Chain Bounty] Creating new bounty record`);
+    
     const bounty = new Bounty({
       bountyId: onChainBountyId || Date.now(),
       repository,
@@ -357,14 +438,14 @@ router.post('/:owner/:repo/bounties/on-chain', authenticateUser, async (req, res
 
     await bounty.save();
 
-    logger.info(`On-chain bounty recorded: ${repository}#${issueId} with tx ${transactionHash}`);
+    logger.info(`[On-Chain Bounty] Created: ${repository}#${issueId} with tx ${transactionHash}`);
 
     res.json({
       success: true,
       bounty: bounty.toJSON()
     });
   } catch (error) {
-    logger.error('Error recording on-chain bounty:', error);
+    logger.error('[On-Chain Bounty] Error recording bounty:', error);
     res.status(500).json({ error: 'Failed to record bounty' });
   }
 });
