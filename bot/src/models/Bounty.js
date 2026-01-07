@@ -211,11 +211,9 @@ class Bounty {
     return Bounty.fromRow(rows[0]);
   }
 
-  static async find(query = {}) {
-    // This returns a pseudo-promise that has sort/limit/skip methods if we want to chain
-    // But for simplicity, let's implement a chainable builder or just basic query
-    // The existing code uses .sort().limit().skip()
-    // We should implement a query builder
+  static find(query = {}) {
+    // Returns a chainable QueryBuilder that can be awaited
+    // Supports: .sort(), .limit(), .skip(), .where()
     return new QueryBuilder(query);
   }
 

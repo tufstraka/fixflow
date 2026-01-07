@@ -807,6 +807,52 @@ class EthereumPaymentService {
   }
 
   /**
+   * Get escrow contract stats (balance, total bounties, etc.)
+   */
+  async getEscrowStats() {
+    if (!this.initialized) {
+      throw new Error('Ethereum payment service not initialized');
+    }
+
+    if (!this.escrowContract) {
+      return {
+        enabled: false,
+        message: 'Escrow contract not configured'
+      };
+    }
+
+    try {
+      const escrowAddress = await this.escrowContract.getAddress();
+      
+      // Get MNEE balance held in escrow contract
+      const escrowBalance = await this.mneeToken.balanceOf(escrowAddress);
+      
+      // Get platform fee
+      let platformFeeBps = 0;
+      try {
+        platformFeeBps = await this.escrowContract.platformFeeBps();
+      } catch {
+        // Contract may not have this function
+      }
+
+      return {
+        enabled: true,
+        escrowAddress,
+        escrowBalance: this.fromAtomicUnits(escrowBalance),
+        platformFeeBps: Number(platformFeeBps),
+        tokenAddress: await this.mneeToken.getAddress(),
+        tokenDecimals: this.decimals
+      };
+    } catch (error) {
+      logger.error('Failed to get escrow stats', { error: error.message });
+      return {
+        enabled: true,
+        error: error.message
+      };
+    }
+  }
+
+  /**
    * Validate Ethereum address
    */
   validateAddress(address) {

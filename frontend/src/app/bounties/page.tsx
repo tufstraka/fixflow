@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWeb3 } from '@/contexts/Web3Context';
 import { api, Bounty } from '@/lib/api';
 import { MOCK_BOUNTIES, simulateDelay } from '@/lib/mockData';
-import { 
-  Search, ExternalLink, Clock, TrendingUp, 
-  Coins, Target, Sparkles, GitBranch, User, ChevronLeft, 
-  ChevronRight, Timer, ArrowUpRight, Filter, X
+import {
+  Search, ExternalLink, Clock, TrendingUp,
+  Coins, Target, Sparkles, GitBranch, User, ChevronLeft,
+  ChevronRight, Timer, ArrowUpRight, Filter, X, Plus, Wallet
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { CreateBountyModal } from '@/components/CreateBountyModal';
 
 // Helper function to truncate addresses for display
 const truncateAddress = (address: string): string => {
@@ -22,13 +24,20 @@ const truncateAddress = (address: string): string => {
 };
 
 export default function BountiesPage() {
-  const { isDemo } = useAuth();
+  const { isDemo, user } = useAuth();
+  const { isBlockchainMode } = useWeb3();
   const [bounties, setBounties] = useState<Bounty[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<string>('active');
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // Create bounty modal state
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showIssueInput, setShowIssueInput] = useState(false);
+  const [newBountyRepo, setNewBountyRepo] = useState('');
+  const [newBountyIssue, setNewBountyIssue] = useState('');
 
   useEffect(() => {
     loadBounties();
@@ -112,6 +121,34 @@ export default function BountiesPage() {
     }
   };
 
+  const handleOpenCreateModal = () => {
+    setShowIssueInput(true);
+    setNewBountyRepo('');
+    setNewBountyIssue('');
+  };
+
+  const handleIssueInputSubmit = () => {
+    if (!newBountyRepo || !newBountyIssue) return;
+    // Validate repo format (owner/repo)
+    if (!newBountyRepo.includes('/')) {
+      alert('Please enter repository in format: owner/repo');
+      return;
+    }
+    setShowIssueInput(false);
+    setShowCreateModal(true);
+  };
+
+  const handleModalClose = () => {
+    setShowCreateModal(false);
+    setNewBountyRepo('');
+    setNewBountyIssue('');
+  };
+
+  const handleBountySuccess = () => {
+    loadBounties();
+    handleModalClose();
+  };
+
   return (
     <div className="min-h-screen pb-24 bg-gray-50/50">
       {/* Header */}
@@ -130,11 +167,23 @@ export default function BountiesPage() {
               <p className="text-gray-500">Find your next opportunity to earn MNEE</p>
             </div>
             
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
-              <div className="w-2 h-2 rounded-full bg-secondary-500 animate-pulse" />
-              <span className="text-sm text-gray-600">
-                {filteredBounties.filter(b => b.status === 'active').length} active bounties
-              </span>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-100">
+                <div className="w-2 h-2 rounded-full bg-secondary-500 animate-pulse" />
+                <span className="text-sm text-gray-600">
+                  {filteredBounties.filter(b => b.status === 'active').length} active bounties
+                </span>
+              </div>
+              
+              {user && isBlockchainMode && (
+                <button
+                  onClick={handleOpenCreateModal}
+                  className="btn-primary"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Fund a Bounty</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -468,6 +517,93 @@ export default function BountiesPage() {
           </div>
         </div>
       </div>
+
+      {/* Issue Input Modal */}
+      {showIssueInput && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowIssueInput(false)}
+            />
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="w-12 h-12 rounded-xl bg-primary-100 flex items-center justify-center mb-4">
+                <Wallet className="w-6 h-6 text-primary-600" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Fund a Bounty</h2>
+              <p className="text-gray-500 text-sm mb-6">
+                Enter the GitHub repository and issue number you want to fund
+              </p>
+              
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Repository
+                  </label>
+                  <input
+                    type="text"
+                    value={newBountyRepo}
+                    onChange={(e) => setNewBountyRepo(e.target.value)}
+                    placeholder="owner/repo"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-200
+                      focus:border-primary-300 focus:ring-2 focus:ring-primary-100
+                      outline-none transition-all"
+                    autoFocus
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    e.g., facebook/react or vercel/next.js
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Issue Number
+                  </label>
+                  <input
+                    type="number"
+                    value={newBountyIssue}
+                    onChange={(e) => setNewBountyIssue(e.target.value)}
+                    placeholder="42"
+                    className="w-full px-4 py-3 rounded-lg border border-gray-200
+                      focus:border-primary-300 focus:ring-2 focus:ring-primary-100
+                      outline-none transition-all"
+                    min="1"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowIssueInput(false)}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200
+                    text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleIssueInputSubmit}
+                  disabled={!newBountyRepo || !newBountyIssue || parseInt(newBountyIssue) < 1}
+                  className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Bounty Modal */}
+      {newBountyRepo && newBountyIssue && (
+        <CreateBountyModal
+          isOpen={showCreateModal}
+          onClose={handleModalClose}
+          repository={newBountyRepo}
+          issueId={parseInt(newBountyIssue)}
+          issueUrl={`https://github.com/${newBountyRepo}/issues/${newBountyIssue}`}
+          onSuccess={handleBountySuccess}
+        />
+      )}
     </div>
   );
 }

@@ -4,15 +4,24 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useWeb3 } from '@/contexts/Web3Context';
 import { api, Repository } from '@/lib/api';
 import { DEMO_REPOSITORIES, simulateDelay } from '@/lib/mockData';
-import { FolderKanban, GitBranch, Coins, CheckCircle, Target, ExternalLink, Plus, ArrowUpRight, Sparkles, Settings } from 'lucide-react';
+import { FolderKanban, GitBranch, Coins, CheckCircle, Target, ExternalLink, Plus, ArrowUpRight, Sparkles, Settings, Wallet } from 'lucide-react';
+import { CreateBountyModal } from '@/components/CreateBountyModal';
 
 export default function ProjectsPage() {
   const { user, loading, isDemo } = useAuth();
+  const { isBlockchainMode } = useWeb3();
   const router = useRouter();
   const [repositories, setRepositories] = useState<Repository[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  
+  // Create bounty modal state
+  const [showCreateBountyModal, setShowCreateBountyModal] = useState(false);
+  const [selectedRepo, setSelectedRepo] = useState<string | null>(null);
+  const [issueNumber, setIssueNumber] = useState('');
+  const [showIssueInput, setShowIssueInput] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -43,6 +52,30 @@ export default function ProjectsPage() {
     } finally {
       setLoadingData(false);
     }
+  };
+
+  const handleCreateBounty = (repo: string) => {
+    setSelectedRepo(repo);
+    setShowIssueInput(true);
+    setIssueNumber('');
+  };
+
+  const handleIssueSubmit = () => {
+    if (!selectedRepo || !issueNumber) return;
+    setShowIssueInput(false);
+    setShowCreateBountyModal(true);
+  };
+
+  const handleModalClose = () => {
+    setShowCreateBountyModal(false);
+    setSelectedRepo(null);
+    setIssueNumber('');
+  };
+
+  const handleBountySuccess = () => {
+    // Refresh repository data to show updated bounty counts
+    loadRepositories();
+    handleModalClose();
   };
 
   if (loading || !user) {
@@ -219,19 +252,30 @@ export default function ProjectsPage() {
                 <div className="flex gap-2">
                   <Link
                     href={`/bounties?repo=${repo.repository}`}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5
                       rounded-lg bg-gray-900 text-white text-sm font-medium
                       hover:bg-gray-800 transition-colors"
                   >
                     <Target className="w-4 h-4" />
                     <span>View Bounties</span>
                   </Link>
+                  {isBlockchainMode && (
+                    <button
+                      onClick={() => handleCreateBounty(repo.repository)}
+                      className="inline-flex items-center justify-center w-10 h-10 rounded-lg
+                        bg-primary-100 text-primary-600 hover:bg-primary-200
+                        transition-colors"
+                      title="Fund a Bounty"
+                    >
+                      <Wallet className="w-4 h-4" />
+                    </button>
+                  )}
                   <a
                     href={`https://github.com/${repo.repository}/settings/installations`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg 
-                      border border-gray-200 text-gray-500 hover:text-gray-700 
+                    className="inline-flex items-center justify-center w-10 h-10 rounded-lg
+                      border border-gray-200 text-gray-500 hover:text-gray-700
                       hover:bg-gray-50 hover:border-gray-300 transition-colors"
                   >
                     <Settings className="w-4 h-4" />
@@ -271,6 +315,74 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+
+      {/* Issue Number Input Modal */}
+      {showIssueInput && selectedRepo && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-center justify-center p-4">
+            <div
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowIssueInput(false)}
+            />
+            <div className="relative bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Fund a Bounty</h2>
+              <p className="text-gray-500 text-sm mb-6">
+                Enter the GitHub issue number you want to fund for{' '}
+                <span className="font-medium text-gray-700">{selectedRepo}</span>
+              </p>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Issue Number
+                </label>
+                <input
+                  type="number"
+                  value={issueNumber}
+                  onChange={(e) => setIssueNumber(e.target.value)}
+                  placeholder="e.g., 42"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-200
+                    focus:border-primary-300 focus:ring-2 focus:ring-primary-100
+                    outline-none transition-all"
+                  min="1"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-400 mt-2">
+                  Find the issue number in the URL: github.com/{selectedRepo}/issues/<span className="font-semibold text-primary-600">42</span>
+                </p>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowIssueInput(false)}
+                  className="flex-1 px-4 py-2.5 rounded-lg border border-gray-200
+                    text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleIssueSubmit}
+                  disabled={!issueNumber || parseInt(issueNumber) < 1}
+                  className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Bounty Modal */}
+      {selectedRepo && issueNumber && (
+        <CreateBountyModal
+          isOpen={showCreateBountyModal}
+          onClose={handleModalClose}
+          repository={selectedRepo}
+          issueId={parseInt(issueNumber)}
+          issueUrl={`https://github.com/${selectedRepo}/issues/${issueNumber}`}
+          onSuccess={handleBountySuccess}
+        />
+      )}
     </div>
   );
 }
