@@ -30,15 +30,10 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           bot_server_url: ${{ secrets.BOUNTY_HUNTER_SERVER_URL }}
-          bot_api_key: ${{ secrets.BOUNTY_HUNTER_API_KEY }}
           bounty_amount: 5
           max_bounty: 20
           config_file: .fixflow.yml
-          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws_region: us-east-1
-          bedrock_model_id: anthropic.claude-3-sonnet-20240229-v1:0
-      
+          
       - name: Bounty Creation Summary
         if: steps.bounty.outputs.bounty_created == 'true'
         run: |
