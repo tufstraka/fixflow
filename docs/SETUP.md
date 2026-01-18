@@ -134,12 +134,9 @@ API_KEY=generate_secure_api_key
 
 ### 3.2 Fund Bot Wallet
 
-1. **Get MNEE tokens**: Acquire MNEE on Ethereum mainnet
-2. **Fund the bot wallet**: Transfer MNEE to your bot's Ethereum address
-3. **Fund with ETH**: The bot needs ETH for gas fees to execute transactions
-4. Recommended starting balance:
-   - 500-1000 MNEE for bounty payments
-   - 0.1 ETH for gas fees
+The bot needs ETH for gas fees to execute transactions
+Recommended starting balance:
+  - 0.01 ETH for gas fees
 
 > **MNEE Token Address (Mainnet):** `0x8ccedbAe4916b79da7F3F612EfB2EB93A2bFD6cF`
 >
@@ -170,29 +167,57 @@ npm start
 Create `.github/workflows/fix-flow.yml`:
 
 ```yaml
-name: FixFlow
+name: Create Bounty on Failure
 
 on:
   workflow_run:
-    workflows: ["Tests", "CI"]  # Your test workflow names
-    types:
-      - completed
+    workflows: ["Tests"]
+    types: [completed]
+
+# Required permissions for workflow_run triggered workflows
+permissions:
+  contents: read
+  issues: write
+  actions: read
 
 jobs:
   create-bounty:
+    name: Create FixFlow Bounty
     runs-on: ubuntu-latest
+    # Only run if the triggering workflow failed
     if: ${{ github.event.workflow_run.conclusion == 'failure' }}
     
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
       
-      - name: Create Bounty
-        uses: fixflow/fixflow-action@v1
+      - name: Create FixFlow Bounty
+        uses: tufstraka/fixflow/github-action@main
+        id: bounty
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           bot_server_url: https://api.fixflow.io  # Or your self-hosted instance
-          bounty_amount: 50
-          max_bounty: 150
+          bounty_amount: 5
+          max_bounty: 20
+          config_file: .fixflow.yml
+      
+      - name: Bounty Creation Summary
+        if: steps.bounty.outputs.bounty_created == 'true'
+        run: |
+          echo "🎯 FixFlow Bounty Created!"
+          echo "================================"
+          echo "Issue URL: ${{ steps.bounty.outputs.issue_url }}"
+          echo "Bounty ID: ${{ steps.bounty.outputs.bounty_id }}"
+          echo "Issue Number: ${{ steps.bounty.outputs.issue_number }}"
+          echo ""
+          echo "Triggered by workflow run: ${{ github.event.workflow_run.html_url }}"
+          echo ""
+          echo "A developer can now claim this bounty by:"
+          echo "1. Fixing the failing test"
+          echo "2. Submitting a PR with 'MNEE: their_wallet_address'"
+          echo "3. Getting the PR merged"
 ```
 
 > **Note:** No secrets required! The action uses your repository's built-in GITHUB_TOKEN
