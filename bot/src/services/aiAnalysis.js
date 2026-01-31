@@ -1,4 +1,5 @@
 import { BedrockRuntimeClient, InvokeModelCommand } from '@aws-sdk/client-bedrock-runtime';
+import { Orbit } from '@with-orbit/sdk';
 import logger from '../utils/logger.js';
 
 /**
@@ -6,6 +7,8 @@ import logger from '../utils/logger.js';
  * 
  * This service provides AI-powered analysis of test failures using Amazon Bedrock.
  * It analyzes workflow logs, identifies root causes, and suggests fixes.
+ * 
+ * Cost tracking is handled by Orbit SDK for usage attribution and monitoring.
  */
 class AIAnalysisService {
   constructor() {
@@ -13,6 +16,8 @@ class AIAnalysisService {
     this.modelId = null;
     this.initialized = false;
     this.enabled = false;
+    this.orbit = null;
+    this.orbitEnabled = false;
   }
 
   /**
@@ -24,6 +29,21 @@ class AIAnalysisService {
       const awsSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
       const awsRegion = process.env.AWS_REGION || 'us-east-1';
       this.modelId = process.env.BEDROCK_MODEL_ID || 'anthropic.claude-3-sonnet-20240229-v1:0';
+
+      // Initialize Orbit for cost tracking (optional)
+      const orbitApiKey = process.env.ORBIT_API_KEY;
+      if (orbitApiKey) {
+        try {
+          this.orbit = new Orbit({ apiKey: orbitApiKey });
+          this.orbitEnabled = true;
+          logger.info('[AI-SERVICE] ✓ Orbit cost tracking initialized');
+        } catch (orbitError) {
+          logger.warn('[AI-SERVICE] Failed to initialize Orbit cost tracking:', orbitError.message);
+          this.orbitEnabled = false;
+        }
+      } else {
+        logger.info('[AI-SERVICE] Orbit API key not configured - cost tracking disabled');
+      }
 
       if (!awsAccessKeyId || !awsSecretAccessKey) {
         logger.warn('[AI-SERVICE] AWS credentials not configured - AI analysis will be disabled');
@@ -45,12 +65,61 @@ class AIAnalysisService {
       
       logger.info('[AI-SERVICE] ✓ AI Analysis service initialized', {
         region: awsRegion,
-        modelId: this.modelId
+        modelId: this.modelId,
+        orbitEnabled: this.orbitEnabled
       });
     } catch (error) {
       logger.error('[AI-SERVICE] Failed to initialize AI Analysis service:', error);
       this.enabled = false;
       this.initialized = true;
+    }
+  }
+
+  /**
+   * Track AI usage with Orbit for cost attribution
+   * @param {Object} responseBody - The response body from Bedrock
+   * @param {string} feature - Feature name for attribution
+   * @param {string} customerId - Optional customer ID for attribution
+   * @param {string} taskId - Optional task ID for multi-step workflows
+   */
+  trackUsage(responseBody, feature, customerId = null, taskId = null) {
+    if (!this.orbitEnabled || !this.orbit) {
+      return;
+    }
+
+    try {
+      // Extract token usage from Claude response
+      // Claude's response format includes usage information
+      const usage = responseBody.usage || {};
+      const inputTokens = usage.input_tokens || 0;
+      const outputTokens = usage.output_tokens || 0;
+
+      const trackingData = {
+        model: this.modelId,
+        input_tokens: inputTokens,
+        output_tokens: outputTokens,
+        feature: feature
+      };
+
+      // Add optional attribution fields
+      if (customerId) {
+        trackingData.customer_id = customerId;
+      }
+      if (taskId) {
+        trackingData.task_id = taskId;
+      }
+
+      this.orbit.track(trackingData);
+
+      logger.debug('[AI-SERVICE] Orbit tracking recorded', {
+        feature,
+        inputTokens,
+        outputTokens,
+        model: this.modelId
+      });
+    } catch (trackError) {
+      // Don't fail the main operation if tracking fails
+      logger.warn('[AI-SERVICE] Failed to track usage with Orbit:', trackError.message);
     }
   }
 
@@ -139,6 +208,16 @@ Respond ONLY with the JSON object, no additional text.`;
       logger.debug('[AI-SERVICE] Sending request to Bedrock...');
       const response = await this.bedrockClient.send(command);
       const responseBody = JSON.parse(new TextDecoder().decode(response.body));
+      
+      // Track usage with Orbit for cost attribution
+      // Feature: 'failure-analysis' for test failure analysis
+      // Customer ID: repository name for per-project attribution
+      this.trackUsage(
+        responseBody,
+        'failure-analysis',
+        context.repository || null,
+        context.commit || null
+      );
       
       // Extract the content from Claude's response
       let analysisText = responseBody.content[0].text;
